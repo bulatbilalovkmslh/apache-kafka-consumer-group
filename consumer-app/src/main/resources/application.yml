@@ -1,0 +1,19 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: consumer-app
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: demo-consumer-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      properties:
+        partition.assignment.strategy: ${PARTITION_ASSIGNMENT_STRATEGY:org.apache.kafka.clients.consumer.RangeAssignor}
+
+consumer:
+  instance-id: ${CONSUMER_INSTANCE_ID:consumer-1}

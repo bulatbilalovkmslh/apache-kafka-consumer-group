@@ -1,0 +1,158 @@
+﻿Spring Boot + Apache Kafka
+Consumer Groups, Rebalancing & Horizontal Scalability Study
+
+Goal
+Цель задания - глубоко разобраться в том, как Kafka масштабирует обработку сообщений с помощью consumer groups, как происходит назначение партиций консюмерам, и как работает механизм ребалансировки при изменении состава группы.
+ Нужно не просто увидеть "что работает", а понять последствия ребалансировки, влияние количества партиций и консюмеров на throughput, задержки и стабильность обработки.
+
+Task Summary
+Создать экспериментальную Kafka-систему на Spring Boot, состоящую из:
+* одного producer-приложения;
+* нескольких consumer-инстансов, работающих в одной consumer group.
+В рамках задания придется:
+* запускать и останавливать консюмеры;
+* изменять количество партиций и консюмеров;
+* провоцировать ребалансировки;
+* анализировать их влияние на обработку сообщений и consumer lag.
+Ожидаемая продолжительность: 6-8 часов.
+
+1. Theory (≈ 2 hours)
+Перед практикой нужно изучить и быть готовым объяснить:
+1. Что такое consumer group и зачем она нужна
+2. Как Kafka назначает партиции консюмерам
+3. Почему один partition может обрабатываться только одним consumer'ом в группе
+4. Что такое rebalancing и в каких случаях он происходит
+5. Разницу между:
+a. eager rebalancing
+b. cooperative (incremental) rebalancing
+6. Что такое partition assignment strategies (Range, RoundRobin, Sticky)
+7. Почему ребалансировки считаются "дорогими" операциями в продакшене
+
+2. Environment Setup
+2.1 Kafka Setup (Docker)
+Поднять Kafka через docker-compose:
+* 1 Kafka broker
+* Zookeeper (или KRaft - опционально)
+Создать topic:
+* name: group-demo-topic
+* partitions: 4
+* replication-factor: 1
+
+2.2 Producer Application
+Создать Spring Boot приложение producer-app.
+Функциональность:
+* Endpoint: POST /produce
+* Producer отправляет сообщения в group-demo-topic
+* Сообщения должны отправляться пакетами (например, по 1000 сообщений)
+Каждое сообщение должно содержать:
+* messageId (UUID)
+* timestamp отправки
+Логировать:
+* partition
+* offset
+* timestamp
+
+2.3 Consumer Application
+Создать Spring Boot приложение consumer-app.
+Требования:
+* Использовать @KafkaListener
+* Настроить:
+o group.id = demo-consumer-group
+o manual commit
+* В логах выводить:
+o consumer instance ID (например, через env variable)
+o partition
+o offset
+o processing timestamp
+o thread name
+
+3. Consumer Group Experiments
+Каждый эксперимент должен выполняться осознанно, с логированием и фиксацией наблюдений.
+
+3.1 Single Consumer Baseline
+Сценарий:
+1. Запустить Kafka
+2. Запустить один consumer
+3. Отправить 2000 сообщений
+Ожидания:
+* Все партиции назначены одному consumer'у
+* Нет ребалансировок
+* Последовательная обработка
+
+3.2 Scaling Consumers Horizontally
+Сценарий:
+1. Запустить 2 consumer-инстанса в одной группе
+2. Отправить 2000 сообщений
+3. Запустить 3-й consumer
+4. Отправить ещё 2000 сообщений
+Задания:
+* Зафиксировать:
+o какие партиции назначены каждому consumer'у
+o момент и длительность ребалансировки
+* Ответить:
+o улучшился ли throughput?
+o что произошло с in-flight сообщениями?
+
+3.3 Over-Provisioning Consumers
+Сценарий:
+1. Запустить 5 consumer-инстансов
+2. Topic имеет 4 партиции
+Задания:
+* Определить:
+o какие consumer'ы остаются idle
+o почему Kafka ведёт себя именно так
+* Сделать вывод:
+o почему "больше консюмеров ≠ быстрее"
+
+3.4 Rebalancing on Failure
+Сценарий:
+1. Запустить 3 consumer-инстанса
+2. Начать активную обработку сообщений
+3. Во время обработки убить один consumer
+Задания:
+* Зафиксировать:
+o момент ребалансировки
+o переназначение партиций
+o влияние на consumer lag
+* Ответить:
+o были ли дубликаты?
+o была ли пауза в обработке?
+
+3.5 Cooperative Rebalancing (Optional)
+Дополнительно:
+* Включить cooperative rebalancing
+* Повторить один из предыдущих сценариев
+Сравнить:
+* длительность ребалансировки
+* влияние на обработку сообщений
+
+4. Observations & Measurements
+Необходимо собрать данные по:
+* количеству ребалансировок
+* времени простоя во время ребалансировки
+* consumer lag до и после масштабирования
+* распределению партиций
+
+5. Deliverables
+5.1 Код
+* Producer Spring Boot app
+* Consumer Spring Boot app
+* Возможность запускать несколько consumer-инстансов
+
+5.2 Experimental Table
+Пример:
+ScenarioConsumersPartitionsRebalance TriggerObserved BehaviorBaseline14nonestable processingScale up2 → 34new consumerlag spikeFailure3 → 24consumer crashrebalance pause
+5.3 Final Summary
+Краткий текст (1-2 страницы), с объяснениями:
+* как Kafka масштабирует consumer'ов
+* почему ребалансировки опасны в продакшене
+* как количество партиций ограничивает масштабирование
+* какие best practices можно выделить
+
+Expected Outcome
+После выполнения задания необходимо уверенно понимать:
+* как работают consumer groups;
+* почему масштабирование Kafka - это не просто "добавить инстансы";
+* какие проблемы возникают при ребалансировке;
+* какие архитектурные решения помогают минимизировать их влияние.
+
